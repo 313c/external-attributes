@@ -12,9 +12,13 @@ module ExternalAttributes
 	# object.attribute_changed? -0 check if attribute was change after save
 	#
 	
-	def external_attributes_for ( association, *args, key: :key, value: :value )
+	def external_attributes_for ( association, key, value, *args )
+		if args.last.is_a? Hash
+			last_hash = args.pop
+			args += last_hash.keys
+		end
+		
 		class_eval do
-			
 			define_method("initialize") do |*options|
 				super *options
 				if !options.empty? and !(options.last.try(:keys) - (options.last.try(:keys) - args)).empty?
@@ -79,7 +83,8 @@ module ExternalAttributes
 			
 			before_save do
 				args.each do |attribute|
-					(found_item = self.send(association).detect{|amd| amd.send(key) == attribute.to_s} || self.send(association).build("#{key}": attribute)).send( "#{value}=", self.send(attribute) ) if self.send("#{attribute}_changed?")
+					should_serialize = true if last_hash.try(:keys).try(:include?, attribute) and last_hash[attribute][:serialize]
+					(found_item = self.send(association).detect{|amd| amd.send(key) == attribute.to_s} || self.send(association).build("#{key}": attribute)).send( "#{value}=", (should_serialize ? self.send(attribute).to_yaml : self.send(attribute) ) ) if self.send("#{attribute}_changed?")
 					found_item.delete if found_item and found_item.send(value).nil?
 				end
 			end
@@ -104,9 +109,24 @@ module ExternalAttributes
 					self.send(attribute) != self.instance_variable_get("@old_saved_#{attribute}")
 				end
 				define_method("#{attribute}") do
+					should_serialize = true if last_hash.try(:keys).try(:include?, attribute) and last_hash[attribute][:serialize]
 					# have to set attribute and old_sved_attribute here because of the includes and for minimlize queries to db we can't make it after initialize
-					self.instance_variable_set("@#{attribute}", self.send(association).detect{|amd| amd.send(key) == attribute.to_s}.try("value")) unless self.instance_variable_defined?("@#{attribute}")
-					self.instance_variable_set("@old_saved_#{attribute}", self.send(association).detect{|amd| amd.send(key) == attribute.to_s}.try("value")) unless self.instance_variable_defined?("@old_saved_#{attribute}")
+					unless self.instance_variable_defined?("@#{attribute}")
+						from_db = self.send(association).detect{|amd| amd.send(key) == attribute.to_s}.try("value")
+						if should_serialize and from_db.present?
+							self.instance_variable_set("@#{attribute}", YAML.load(from_db))
+						else
+							self.instance_variable_set("@#{attribute}", from_db)
+						end
+					end
+					unless self.instance_variable_defined?("@old_saved_#{attribute}")
+						from_db = self.send(association).detect{|amd| amd.send(key) == attribute.to_s}.try("value")
+						if should_serialize and from_db.present?
+							self.instance_variable_set("@old_saved_#{attribute}", YAML.load(from_db))
+						else
+							self.instance_variable_set("@old_saved_#{attribute}", from_db)
+						end
+					end
 					self.instance_variable_get("@#{attribute}")
 				end
 				define_method("#{attribute}=") do |attr|
