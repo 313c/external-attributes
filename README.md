@@ -9,7 +9,7 @@ TODO: Delete this and the text above, and describe your gem
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'external_attributes'
+gem 'external_attributes', git: 'https://codephonic@bitbucket.org/codephonic/rails-external-attributes.git'
 ```
 
 And then execute:
