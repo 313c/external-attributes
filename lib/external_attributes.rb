@@ -19,6 +19,7 @@ module ExternalAttributes
 		end
 		
 		class_eval do
+			attr_accessor :changed_external_attributes
 			define_method("initialize") do |*options|
 				super *options
 				if !options.empty? and !(options.last.try(:keys) - (options.last.try(:keys) - args)).empty?
@@ -81,10 +82,14 @@ module ExternalAttributes
 				return args
 			end
 			
+			after_initialize do
+				self.changed_external_attributes ||= []
+			end
 			before_save do
 				args.each do |attribute|
 					should_serialize = true if last_hash.try(:keys).try(:include?, attribute) and last_hash[attribute][:serialize]
 					(found_item = self.send(association).detect{|amd| amd.send(key) == attribute.to_s} || self.send(association).build("#{key}": attribute)).send( "#{value}=", (should_serialize ? self.send(attribute).to_yaml : self.send(attribute) ) ) if self.send("#{attribute}_changed?")
+					self.changed_external_attributes << attribute.to_s if self.send("#{attribute}_changed?")
 					found_item.delete if found_item and found_item.send(value).nil?
 				end
 			end
@@ -106,7 +111,9 @@ module ExternalAttributes
 			end
 			args.each do |attribute|
 				define_method("#{attribute}_changed?") do
-					self.send(attribute) != self.instance_variable_get("@old_saved_#{attribute}")
+					new_attr = self.send(attribute)
+					old_attr = self.instance_variable_get("@old_saved_#{attribute}")
+					!( new_attr.blank? and old_attr.blank? ) and new_attr != old_attr
 				end
 				define_method("#{attribute}") do
 					should_serialize = true if last_hash.try(:keys).try(:include?, attribute) and last_hash[attribute][:serialize]
