@@ -17,13 +17,15 @@ module ExternalAttributes
 			last_hash = args.pop
 			args += last_hash.keys
 		end
+		@external_attributes_args ||= []
+		@external_attributes_args += args
 		
 		class_eval do
 			attr_accessor :changed_external_attributes
 			define_method("initialize") do |*options|
 				super *options
-				if !options.empty? and !(options.last.try(:keys) - (options.last.try(:keys) - args)).empty?
-					args.each do |attribute|
+				if !options.empty? and !(options.last.try(:keys) - (options.last.try(:keys) - @external_attributes_args)).empty?
+					@external_attributes_args.each do |attribute|
 						self.instance_variable_set("@#{attribute}", options.last[attribute]) if options.last[attribute]
 					end
 				end
@@ -49,13 +51,14 @@ module ExternalAttributes
 			##################
 			# external_order #
 			##################
+			# remove_method :external_order if method_defined? :external_order
 			define_singleton_method :external_order do |*order_args|
 				orders = Array.new
 				return_query = self
 				order_args.each do |arg|
 					if arg.is_a? Hash
 						arg.each do |k, v|
-							if k.to_sym.in?(args)
+							if k.to_sym.in?(@external_attributes_args)
 								orders << "#{k}_table.#{value} #{v}"
 								return_query = return_query.joins("LEFT JOIN #{association} as #{k}_table ON #{self.table_name}.id = #{k}_table.#{self.table_name.singularize}_id AND #{k}_table.#{key} = '#{k}'")
 							else
@@ -63,7 +66,7 @@ module ExternalAttributes
 							end
 						end
 					else
-						if arg.to_sym.in?(args)
+						if arg.to_sym.in?(@external_attributes_args)
 							orders << "#{arg}_table.#{value}"
 							return_query = return_query.joins("LEFT JOIN #{association} as #{arg}_table ON #{self.table_name}.id = #{arg}_table.#{self.table_name.singularize}_id AND #{arg}_table.#{key} = '#{arg}'")
 						else
@@ -79,7 +82,7 @@ module ExternalAttributes
 			# external arguments #
 			######################
 			define_singleton_method :external_attributes do
-				return args
+				return @external_attributes_args
 			end
 			
 			after_initialize do
@@ -103,7 +106,7 @@ module ExternalAttributes
 			# define methods
 			define_method("reload") do |options = nil|
 				super options
-				args.each do |attribute|
+				@external_attributes_args.each do |attribute|
 					self.remove_instance_variable("@#{attribute}") if self.instance_variable_defined?("@#{attribute}")
 					self.remove_instance_variable("@old_saved_#{attribute}") if self.instance_variable_defined?("@old_saved_#{attribute}")
 				end
