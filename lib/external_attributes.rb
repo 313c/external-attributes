@@ -20,7 +20,8 @@ module ExternalAttributes
 		
 		@@external_attributes_args ||= []
 		@@external_attributes_args += args
-		raise ArgumentError unless @@external_attributes_args.detect{ |e| @@external_attributes_args.count(e) > 1 }.blank?
+                @@external_attributes_args = @@external_attributes_args.uniq
+		#raise ArgumentError unless @@external_attributes_args.detect{ |e| @@external_attributes_args.count(e) > 1 }.blank?
 		
 		
 		class_eval do
