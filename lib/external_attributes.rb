@@ -147,8 +147,9 @@ module ExternalAttributes
 				define_method("#{attribute}=") do |attr|
 					self.instance_variable_set("@#{attribute}",attr)
 				end
-				define_method("#{attribute}_obj") do |attr|
-					
+				define_method("#{attribute}_was") do
+					self.send(attribute)
+					self.instance_variable_get("@old_saved_#{attribute}")
 				end
 			end
 			
