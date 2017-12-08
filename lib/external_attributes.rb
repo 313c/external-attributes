@@ -103,8 +103,8 @@ module ExternalAttributes
 			
 			after_save do
 				args.each do |attribute|
-					self.remove_instance_variable("@#{attribute}")
-					self.remove_instance_variable("@old_saved_#{attribute}")
+					self.remove_instance_variable("@#{attribute}") if self.instance_variable_defined?("@#{attribute}")
+					self.remove_instance_variable("@old_saved_#{attribute}") if self.instance_variable_defined?("@old_saved_#{attribute}")
 					#self.instance_variable_set("@old_saved_#{attribute}",self.send(attribute))
 				end
 			end
