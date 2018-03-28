@@ -1,5 +1,4 @@
 require "external_attributes/version"
-
 module ExternalAttributes
 	#
 	# MODULE CREATED BY CODEPHONIC/CODEEV FOR ATTRIBUTES WITH EXTERNAL TABLE
@@ -12,7 +11,7 @@ module ExternalAttributes
 	# object.attribute_changed? -0 check if attribute was change after save
 	#
 	
-	def external_attributes_for ( association, key, value, *args )
+	def external_attributes_for ( association_name, key, value, *args )
 		if args.last.is_a? Hash
 			last_hash = args.pop
 			args += last_hash.keys
@@ -20,7 +19,7 @@ module ExternalAttributes
 		
 		@@external_attributes_args ||= []
 		@@external_attributes_args += args
-                @@external_attributes_args = @@external_attributes_args.uniq
+		@@external_attributes_args = @@external_attributes_args.uniq
 		#raise ArgumentError unless @@external_attributes_args.detect{ |e| @@external_attributes_args.count(e) > 1 }.blank?
 		
 		
@@ -42,8 +41,14 @@ module ExternalAttributes
 			define_singleton_method :external_where do |*where_args|
 				where_args = where_args.last
 				mds = Array.new
-				where_args.each do |k,v|
-					mds << association.to_s.classify.safe_constantize.where(key => k, value => v).select("#{self.table_name.singularize}_id").map{|md| md.send("#{self.table_name.singularize}_id".to_sym)}
+				class_name = self.reflect_on_association(association_name).klass.name
+				foreign_key = self.reflect_on_association(association_name).foreign_key
+				if where_args.first.is_a?(String)
+					mds << class_name.safe_constantize.where(where_args).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
+				else
+					where_args.each do |k,v|
+						mds << class_name.safe_constantize.where(key => k, value => v).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
+					end
 				end
 				ids = mds.shift
 				mds.each do |arr|
@@ -64,16 +69,30 @@ module ExternalAttributes
 					if arg.is_a? Hash
 						arg.each do |k, v|
 							if k.to_sym.in?(@@external_attributes_args)
-								orders << "#{k}_table.#{value} #{v}"
-								return_query = return_query.joins("LEFT JOIN #{association} as #{k}_table ON #{self.table_name}.id = #{k}_table.#{self.table_name.singularize}_id AND #{k}_table.#{key} = '#{k}'")
+								if v.is_a? Hash
+									case v[:type]
+									when :integer
+										order = "cast(#{k}_table.#{value} as unsigned)"
+									else
+										order = "#{k}_table.#{value}"
+									end
+									order += " #{v[:dir]}" if v[:dir]
+									orders << order
+								else
+									orders << "#{k}_table.#{value} #{v}"
+								end
+								# Rails.logger.info orders
+								association_table_name = self.reflect_on_association(association_name).klass.name.safe_constantize.table_name
+								foreign_key = self.reflect_on_association(association_name).foreign_key
+								return_query = return_query.joins("LEFT JOIN #{association_table_name} as #{k}_table ON #{self.table_name}.id = #{k}_table.#{foreign_key} AND #{k}_table.#{key} = '#{k}'")
 							else
-							  orders << "#{k} #{v}"
+								orders << "#{k} #{v}"
 							end
 						end
 					else
 						if arg.to_sym.in?(@@external_attributes_args)
 							orders << "#{arg}_table.#{value}"
-							return_query = return_query.joins("LEFT JOIN #{association} as #{arg}_table ON #{self.table_name}.id = #{arg}_table.#{self.table_name.singularize}_id AND #{arg}_table.#{key} = '#{arg}'")
+							return_query = return_query.joins("LEFT JOIN #{association_name} as #{arg}_table ON #{self.table_name}.id = #{arg}_table.#{self.table_name.singularize}_id AND #{arg}_table.#{key} = '#{arg}'")
 						else
 							orders << "#{arg}"
 						end
@@ -92,21 +111,14 @@ module ExternalAttributes
 			after_initialize do
 				self.changed_external_attributes ||= []
 			end
-			before_save do
+			around_save do |activity, block|
 				args.each do |attribute|
 					should_serialize = true if last_hash.try(:keys).try(:include?, attribute) and last_hash[attribute][:serialize]
-					(found_item = self.send(association).detect{|amd| amd.send(key) == attribute.to_s} || self.send(association).build("#{key}": attribute)).send( "#{value}=", (should_serialize ? self.send(attribute).to_yaml : self.send(attribute) ) ) if self.send("#{attribute}_changed?")
+					(found_item = self.send(association_name).detect{|amd| amd.send(key) == attribute.to_s} || self.send(association_name).build("#{key}": attribute)).send( "#{value}=", (should_serialize ? self.send(attribute).to_yaml : self.send(attribute) ) ) if self.send("#{attribute}_changed?")
 					self.changed_external_attributes << attribute.to_s if self.send("#{attribute}_changed?")
 					found_item.delete if found_item and found_item.send(value).nil?
 				end
-			end
-			
-			after_save do
-				args.each do |attribute|
-					self.remove_instance_variable("@#{attribute}") if self.instance_variable_defined?("@#{attribute}")
-					self.remove_instance_variable("@old_saved_#{attribute}") if self.instance_variable_defined?("@old_saved_#{attribute}")
-					#self.instance_variable_set("@old_saved_#{attribute}",self.send(attribute))
-				end
+				block.call
 			end
 			
 			# define methods
@@ -114,44 +126,33 @@ module ExternalAttributes
 				super options
 				@@external_attributes_args.each do |attribute|
 					self.remove_instance_variable("@#{attribute}") if self.instance_variable_defined?("@#{attribute}")
-					self.remove_instance_variable("@old_saved_#{attribute}") if self.instance_variable_defined?("@old_saved_#{attribute}")
 				end
 				self
 			end unless method_defined? :reload
 			
 			args.each do |attribute|
 				define_method("#{attribute}_changed?") do
-					new_attr = self.send(attribute)
-					old_attr = self.instance_variable_get("@old_saved_#{attribute}")
-					!( new_attr.blank? and old_attr.blank? ) and new_attr != old_attr
+					changed_attributes.keys.map{|key| key.to_sym}.include?(attribute.to_sym)
+				end
+				define_method("#{attribute}_was") do
+					changed_attributes.try(:[],attribute)
 				end
 				define_method("#{attribute}") do
 					should_serialize = true if last_hash.try(:keys).try(:include?, attribute) and last_hash[attribute][:serialize]
 					# have to set attribute and old_sved_attribute here because of the includes and for minimlize queries to db we can't make it after initialize
 					unless self.instance_variable_defined?("@#{attribute}")
-						from_db = self.send(association).detect{|amd| amd.send(key) == attribute.to_s}.try("value")
+						from_db = self.send(association_name).detect{|amd| amd.send(key) == attribute.to_s}.try("value")
 						if should_serialize and from_db.present?
 							self.instance_variable_set("@#{attribute}", YAML.load(from_db))
 						else
 							self.instance_variable_set("@#{attribute}", from_db)
 						end
 					end
-					unless self.instance_variable_defined?("@old_saved_#{attribute}")
-						from_db = self.send(association).detect{|amd| amd.send(key) == attribute.to_s}.try("value")
-						if should_serialize and from_db.present?
-							self.instance_variable_set("@old_saved_#{attribute}", YAML.load(from_db))
-						else
-							self.instance_variable_set("@old_saved_#{attribute}", from_db)
-						end
-					end
 					self.instance_variable_get("@#{attribute}")
 				end
 				define_method("#{attribute}=") do |attr|
+					@changed_attributes = changed_attributes.merge(ActiveSupport::HashWithIndifferentAccess.new({attribute => self.send(attribute)})) if attr != self.send(attribute)
 					self.instance_variable_set("@#{attribute}",attr)
-				end
-				define_method("#{attribute}_was") do
-					self.send(attribute)
-					self.instance_variable_get("@old_saved_#{attribute}")
 				end
 			end
 			
