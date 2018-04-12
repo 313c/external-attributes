@@ -28,8 +28,8 @@ module ExternalAttributes
 			# @changed_external_attributes
 			define_method("initialize") do |*options|
 				super *options
-				if !options.empty? and !(options.last.try(:keys) - (options.last.try(:keys) - @external_attributes_args)).empty?
-					@external_attributes_args.each do |attribute|
+				if !options.empty? and !(options.last.try(:keys) - (options.last.try(:keys) - self.class.external_attributes)).empty?
+					self.class.external_attributes.each do |attribute|
 						self.instance_variable_set("@#{attribute}", options.last[attribute]) if options.last[attribute]
 					end
 				end
@@ -124,7 +124,7 @@ module ExternalAttributes
 			# define methods
 			define_method("reload") do |options = nil|
 				super options
-				@external_attributes_args.each do |attribute|
+				self.class.external_attributes.each do |attribute|
 					self.remove_instance_variable("@#{attribute}") if self.instance_variable_defined?("@#{attribute}")
 				end
 				self
