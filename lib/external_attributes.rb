@@ -17,10 +17,10 @@ module ExternalAttributes
 			args += last_hash.keys
 		end
 		
-		@@external_attributes_args ||= []
-		@@external_attributes_args += args
-		@@external_attributes_args = @@external_attributes_args.uniq
-		#raise ArgumentError unless @@external_attributes_args.detect{ |e| @@external_attributes_args.count(e) > 1 }.blank?
+		@external_attributes_args ||= []
+		@external_attributes_args += args
+		@external_attributes_args = @external_attributes_args.uniq
+		#raise ArgumentError unless @external_attributes_args.detect{ |e| @external_attributes_args.count(e) > 1 }.blank?
 		
 		
 		class_eval do
@@ -28,8 +28,8 @@ module ExternalAttributes
 			# @changed_external_attributes
 			define_method("initialize") do |*options|
 				super *options
-				if !options.empty? and !(options.last.try(:keys) - (options.last.try(:keys) - @@external_attributes_args)).empty?
-					@@external_attributes_args.each do |attribute|
+				if !options.empty? and !(options.last.try(:keys) - (options.last.try(:keys) - @external_attributes_args)).empty?
+					@external_attributes_args.each do |attribute|
 						self.instance_variable_set("@#{attribute}", options.last[attribute]) if options.last[attribute]
 					end
 				end
@@ -68,7 +68,7 @@ module ExternalAttributes
 				order_args.each do |arg|
 					if arg.is_a? Hash
 						arg.each do |k, v|
-							if k.to_sym.in?(@@external_attributes_args)
+							if k.to_sym.in?(@external_attributes_args)
 								if v.is_a? Hash
 									case v[:type]
 									when :integer
@@ -90,7 +90,7 @@ module ExternalAttributes
 							end
 						end
 					else
-						if arg.to_sym.in?(@@external_attributes_args)
+						if arg.to_sym.in?(@external_attributes_args)
 							orders << "#{arg}_table.#{value}"
 							return_query = return_query.joins("LEFT JOIN #{association_name} as #{arg}_table ON #{self.table_name}.id = #{arg}_table.#{self.table_name.singularize}_id AND #{arg}_table.#{key} = '#{arg}'")
 						else
@@ -105,7 +105,7 @@ module ExternalAttributes
 			# external arguments #
 			######################
 			define_singleton_method :external_attributes do
-				return @@external_attributes_args
+				return @external_attributes_args
 			end unless method_defined? :external_attributes
 			
 			after_initialize do
@@ -124,7 +124,7 @@ module ExternalAttributes
 			# define methods
 			define_method("reload") do |options = nil|
 				super options
-				@@external_attributes_args.each do |attribute|
+				@external_attributes_args.each do |attribute|
 					self.remove_instance_variable("@#{attribute}") if self.instance_variable_defined?("@#{attribute}")
 				end
 				self
