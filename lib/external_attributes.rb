@@ -86,7 +86,7 @@ module ExternalAttributes
 								foreign_key = self.reflect_on_association(association_name).foreign_key
 								return_query = return_query.joins("LEFT JOIN #{association_table_name} as #{k}_table ON #{self.table_name}.id = #{k}_table.#{foreign_key} AND #{k}_table.#{key} = '#{k}'")
 							else
-								orders << "#{k} #{v}"
+								orders << "#{self.table_name}.#{k} #{v}"
 							end
 						end
 					else
