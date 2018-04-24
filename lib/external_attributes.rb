@@ -47,7 +47,12 @@ module ExternalAttributes
 					mds << class_name.safe_constantize.where(where_args).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
 				else
 					where_args.each do |k,v|
-						mds << class_name.safe_constantize.where(key => k, value => v).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
+            # for value as range except date range
+						if v.is_a?(Range) && !(v.first.respond_to?(:to_date) && v.to_date.present?)
+              mds << class_name.safe_constantize.where("name=:name AND CAST(`#{value}` AS UNSIGNED) BETWEEN :min AND :max", name: k, min: v.first, max: v.last ).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
+            else
+						  mds << class_name.safe_constantize.where(key => k, value => v).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
+            end
 					end
 				end
 				ids = mds.shift
