@@ -43,6 +43,7 @@ module ExternalAttributes
 				mds = Array.new
 				class_name = self.reflect_on_association(association_name).klass.name
 				foreign_key = self.reflect_on_association(association_name).foreign_key
+				association_table_name = class_name.safe_constantize.table_name
 				if where_args.first.is_a?(String)
 					mds << class_name.safe_constantize.where(where_args).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
 				else
@@ -50,6 +51,8 @@ module ExternalAttributes
             # for value as range except date range
 						if v.is_a?(Range) && !(v.first.respond_to?(:to_date) && v.first.to_date.present?)
               mds << class_name.safe_constantize.where("name=:name AND CAST(`#{value}` AS UNSIGNED) BETWEEN :min AND :max", name: k, min: v.first, max: v.last ).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
+						elsif v.nil?							
+							mds << self.name.safe_constantize.select(:id).joins("LEFT JOIN #{association_table_name} as #{association_table_name}_#{k} ON #{association_table_name}_#{k}.#{foreign_key} = #{self.table_name}.id AND #{association_table_name}_#{k}.#{key} = '#{k}'").where("#{association_table_name}_#{k}.#{key} IS NULL").ids
             else
 						  mds << class_name.safe_constantize.where(key => k, value => v).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
             end
