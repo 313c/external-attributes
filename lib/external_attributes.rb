@@ -51,7 +51,7 @@ module ExternalAttributes
             # for value as range except date range
 						if v.is_a?(Range) && !(v.first.respond_to?(:to_date) && v.first.to_date.present?)
               mds << class_name.safe_constantize.where("name=:name AND CAST(`#{value}` AS UNSIGNED) BETWEEN :min AND :max", name: k, min: v.first, max: v.last ).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
-						elsif v.nil?							
+						elsif v.nil?
 							mds << self.name.safe_constantize.select(:id).joins("LEFT JOIN #{association_table_name} as #{association_table_name}_#{k} ON #{association_table_name}_#{k}.#{foreign_key} = #{self.table_name}.id AND #{association_table_name}_#{k}.#{key} = '#{k}'").where("#{association_table_name}_#{k}.#{key} IS NULL").ids
             else
 						  mds << class_name.safe_constantize.where(key => k, value => v).select(foreign_key).map{|md| md.send(foreign_key.to_sym)}
@@ -61,8 +61,8 @@ module ExternalAttributes
 				ids = mds.shift
 				mds.each do |arr|
 					ids = ids & arr
-				end
-				return self.where(id: ids) unless ids.empty?
+				end				
+				return self.where(id: ids.uniq) unless ids.empty?
 				self.where("1=0")
 			end unless method_defined? :external_where
 			
