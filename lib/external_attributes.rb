@@ -20,10 +20,14 @@ module ExternalAttributes
 		@external_attributes_args ||= []
 		@external_attributes_args += args
 		@external_attributes_args = @external_attributes_args.uniq
-		#raise ArgumentError unless @external_attributes_args.detect{ |e| @external_attributes_args.count(e) > 1 }.blank?
-		
 		
 		class_eval do
+		
+			def self.inherited(subclass)
+    		subclass.instance_variable_set("@external_attributes_args", @external_attributes_args)
+  		end
+			#raise ArgumentError unless @external_attributes_args.detect{ |e| @external_attributes_args.count(e) > 1 }.blank?
+			
 			attr_accessor :changed_external_attributes unless method_defined? :changed_external_attributes
 			# @changed_external_attributes
 			define_method("initialize") do |*options|
@@ -61,7 +65,7 @@ module ExternalAttributes
 				ids = mds.shift
 				mds.each do |arr|
 					ids = ids & arr
-				end				
+				end
 				return self.where(id: ids.uniq) unless ids.empty?
 				self.where("1=0")
 			end unless method_defined? :external_where
