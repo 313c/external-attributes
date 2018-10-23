@@ -1,5 +1,6 @@
 require "external_attributes/version"
 module ExternalAttributes
+	
 	#
 	# MODULE CREATED BY CODEPHONIC/CODEEV FOR ATTRIBUTES WITH EXTERNAL TABLE
 	# This module creates custom ActiveRecord attributes
@@ -17,14 +18,15 @@ module ExternalAttributes
 			args += last_hash.keys
 		end
 		
-		@external_attributes_args ||= []
-		@external_attributes_args += args
-		@external_attributes_args = @external_attributes_args.uniq
-		
 		class_eval do
+			
+			@external_attributes_args ||= []
+			@external_attributes_args += args
+			@external_attributes_args = @external_attributes_args.uniq
 		
 			def self.inherited(subclass)
     		subclass.instance_variable_set("@external_attributes_args", @external_attributes_args)
+				subclass.instance_variable_set("@changed_attributes", @changed_attributes)
   		end
 			#raise ArgumentError unless @external_attributes_args.detect{ |e| @external_attributes_args.count(e) > 1 }.blank?
 			
@@ -141,6 +143,22 @@ module ExternalAttributes
 				end
 				self
 			end unless method_defined? :reload
+			
+			define_method("update_column") do |col_name, col_value|
+				if self.class.external_attributes.include? col_name.to_sym
+					self.send("#{col_name}=",col_value)
+					class_name = self.class.reflect_on_association(association_name).klass
+					foreign_key = self.class.reflect_on_association(association_name).foreign_key
+					md = class_name.find_or_create_by("#{key}" => col_name, "#{foreign_key}": self.id)
+					if col_value.blank?
+						md.destroy
+					else
+						md.update_column("#{value}", self.send("#{col_name}"))
+					end
+				else
+					super col_name, col_value
+				end
+			end
 			
 			args.each do |attribute|
 				define_method("#{attribute}_changed?") do
