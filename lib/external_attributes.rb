@@ -34,6 +34,7 @@ module ExternalAttributes
 			# @changed_external_attributes
 			define_method("initialize") do |*options|
 				super *options
+				options.compact!
 				if !options.empty? and !(options.last.try(:keys) - (options.last.try(:keys) - self.class.external_attributes)).empty?
 					self.class.external_attributes.each do |attribute|
 						self.instance_variable_set("@#{attribute}", options.last[attribute]) if options.last[attribute]
@@ -181,7 +182,7 @@ module ExternalAttributes
 					self.instance_variable_get("@#{attribute}")
 				end
 				define_method("#{attribute}=") do |attr|
-					@changed_attributes = changed_attributes.merge(ActiveSupport::HashWithIndifferentAccess.new({attribute => self.send(attribute)})) unless attr.blank? and self.send(attribute).blank? or attr == self.send(attribute)
+					@cached_changed_attributes = @changed_attributes = changed_attributes.merge(ActiveSupport::HashWithIndifferentAccess.new({attribute => self.send(attribute)})) unless attr.blank? and self.send(attribute).blank? or attr == self.send(attribute)
 					self.instance_variable_set("@#{attribute}",attr)
 				end
 			end
